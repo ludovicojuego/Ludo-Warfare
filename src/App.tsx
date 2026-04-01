@@ -23,48 +23,47 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState(600);
   
-  // Dynamic Resizing Logic
+  // Sync ref with state
+  useEffect(() => {
+    isStatsOpenRef.current = isStatsOpen;
+  }, [isStatsOpen]);
+
+  // Dynamic Resizing Logic (Crucial for TV Layout)
   useEffect(() => {
     const updateSize = () => {
       if (!containerRef.current) return;
       const { clientWidth, clientHeight } = containerRef.current;
       
-      // We want to keep the board a square. 
-      // Leave space for padding and the sidebar on larger screens.
       const isLandscape = clientWidth > clientHeight;
       let size;
       
       if (isLandscape) {
-        // Landscape (TV/Desktop): Height is usually the limiting factor
-        // Leave room for header and padding
-        size = Math.min(clientHeight * 0.85, clientWidth * 0.6);
+        // Height is the limiting factor in landscape
+        size = Math.min(clientHeight * 0.8, clientWidth * 0.55);
       } else {
-        // Portrait (Mobile): Width is the limiting factor
+        // Width is the limiting factor in portrait
         size = clientWidth * 0.9;
       }
       
-      setCanvasSize(Math.max(300, size)); // Min size of 300px
+      const limitedSize = Math.max(300, Math.floor(size));
+      setCanvasSize(limitedSize);
       
       if (gameManagerRef.current) {
-        gameManagerRef.current.resize(size, size);
+        gameManagerRef.current.resize(limitedSize, limitedSize);
       }
     };
 
     const observer = new ResizeObserver(updateSize);
     if (containerRef.current) observer.observe(containerRef.current);
     window.addEventListener('resize', updateSize);
-    updateSize(); // Initial call
+    updateSize();
 
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', updateSize);
     };
   }, [gameMode]);
-  useEffect(() => {
-    isStatsOpenRef.current = isStatsOpen;
-  }, [isStatsOpen]);
 
-  // Global Music Management
   useEffect(() => {
     if (gameMode !== 'menu') {
       music.start();
@@ -72,6 +71,7 @@ export default function App() {
       music.stop();
     }
   }, [gameMode]);
+
   const [gameState, setGameState] = useState({
     currentPlayer: 'red',
     message: "RED'S TURN",
@@ -87,22 +87,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Initialize Gamepad Manager (always active)
     const gamepad = new GamepadManager((action) => {
       if (gameMode === 'menu') {
-        if (action === GamepadAction.UP || action === GamepadAction.LEFT) {
-          // In a real menu we'd cycle buttons, for now just a simple mapping
-        }
-        if (action === GamepadAction.SELECT) {
-          startGame('ai', 4); // Default to AI with 4 players on select in menu for now
-        }
+        if (action === GamepadAction.SELECT) startGame('ai', 4);
         return;
       }
-
       if (isStatsOpenRef.current) {
-        if (action === GamepadAction.BACK || action === GamepadAction.SELECT) {
-          setIsStatsOpen(false);
-        }
+        if (action === GamepadAction.BACK || action === GamepadAction.SELECT) setIsStatsOpen(false);
         return;
       }
       if (gameManagerRef.current) {
@@ -128,7 +119,6 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Initialize Game Manager
     const allColors: any[] = ['red', 'blue', 'yellow', 'green'];
     const aiPlayers = gameMode === 'ai' ? allColors.slice(1, playerCount) : [];
     const gm = new GameManager(canvas.width, canvas.height, playerCount, aiPlayers);
@@ -141,18 +131,11 @@ export default function App() {
     const loop = (time: number) => {
       const dt = time - lastTime;
       lastTime = time;
-
-      // Update gamepad
       gamepad.update();
-
-      // Update game logic
       gm.update(dt);
-
-      // Draw game
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       gm.draw(ctx);
 
-      // Update React state for UI
       setGameState({
         currentPlayer: gm.players[gm.currentPlayerIndex],
         message: gm.message,
@@ -166,7 +149,6 @@ export default function App() {
         wasGameOver = true;
         setIsStatsOpen(true);
       }
-
       animationId = requestAnimationFrame(loop);
     };
 
@@ -187,7 +169,7 @@ export default function App() {
   };
 
   const handleRoll = () => {
-    if (gameManagerRef.current) {
+    if (gameManagerRef.current && !gameState.hasRolled && !gameState.isRolling) {
       gameManagerRef.current.dice.roll();
     }
   };
@@ -207,14 +189,13 @@ export default function App() {
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-4 md:p-8 font-sans relative overflow-hidden">
+    <div ref={containerRef} className="h-screen w-screen bg-neutral-900 flex flex-col items-center justify-center p-2 md:p-8 font-sans relative overflow-hidden">
       <AnimatePresence>
         {gameMode === 'menu' && (
           <StartMenu onStart={startGame} />
         )}
       </AnimatePresence>
 
-      {/* Diffused Background Effect */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <AnimatePresence>
           <motion.div
@@ -237,141 +218,115 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-      <div className="relative z-10 flex flex-col items-center justify-center w-full h-full max-w-7xl mx-auto">
-        {/* Header */}
-      <div className="mb-4 md:mb-8 text-center">
-        <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter uppercase italic flex items-center justify-center gap-4">
-          <Swords className="w-8 h-8 md:w-12 md:h-12 text-red-500" />
-          Ludo / Parchís
-          <span className="text-red-500 italic">Warfare</span>
-        </h1>
-        <p className="text-neutral-400 text-[10px] md:text-xs uppercase tracking-[0.2em] mt-1 font-bold">Animated Soldier Edition</p>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-6 md:gap-12 items-center lg:items-start justify-center w-full">
-        {/* Game Board Container */}
-        <div className="relative bg-neutral-800 p-2 md:p-4 rounded-3xl shadow-2xl border-4 border-neutral-700 flex-shrink-0">
-          <canvas
-            ref={canvasRef}
-            width={canvasSize}
-            height={canvasSize}
-            onClick={handleCanvasClick}
-            className="rounded-xl cursor-crosshair shadow-inner"
-            style={{ width: `${canvasSize}px`, height: `${canvasSize}px` }}
-          />
+      <div className="relative z-10 flex flex-col items-center justify-center w-full h-full max-w-7xl mx-auto overflow-hidden">
+        {/* Header - Compact for TV */}
+        <div className="mb-2 md:mb-6 text-center">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase italic flex items-center justify-center gap-2 md:gap-4">
+            <Swords className="w-6 h-6 md:w-8 md:h-8 text-red-500" />
+            Ludo / Parchís
+            <span className="text-red-500 italic">Warfare</span>
+          </h1>
+          <p className="text-neutral-400 text-[8px] md:text-[10px] uppercase tracking-[0.2em] font-bold">Animated Soldier Edition</p>
         </div>
 
-        {/* UI Controls */}
-        <div className="flex flex-col gap-6 w-full max-w-xs">
-          {/* Game Message */}
-          <div className="min-h-[64px]">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={gameState.message}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="bg-neutral-800 p-4 rounded-2xl border border-neutral-700 shadow-xl text-center"
-              >
-                <span className={`text-xs font-bold uppercase tracking-widest ${playerTextColors[gameState.currentPlayer]}`}>
-                  {gameState.message}
-                </span>
-              </motion.div>
-            </AnimatePresence>
+        <div className="flex flex-col md:flex-row gap-4 md:gap-8 items-center md:items-start justify-center w-full h-full max-h-[85vh]">
+          {/* Board Area (Left Side in Landscape) */}
+          <div className="relative bg-neutral-800 p-2 md:p-4 rounded-2xl md:rounded-3xl shadow-2xl border-2 md:border-4 border-neutral-700 flex-shrink-0">
+            <canvas
+              ref={canvasRef}
+              width={canvasSize}
+              height={canvasSize}
+              onClick={handleCanvasClick}
+              className="rounded-xl cursor-crosshair shadow-inner"
+              style={{ width: `${canvasSize}px`, height: `${canvasSize}px` }}
+            />
           </div>
 
-          {/* Current Player Card */}
-          <div className="bg-neutral-800 p-6 rounded-3xl border border-neutral-700 shadow-xl">
-            <div className="flex items-center gap-4 mb-4">
-              <div className={`w-12 h-12 rounded-2xl ${playerColors[gameState.currentPlayer]} flex items-center justify-center shadow-lg`}>
-                <User className="text-white w-6 h-6" />
+          {/* Sidebar Area (Right Side in Landscape) */}
+          <div className="flex flex-col gap-3 md:gap-4 w-full max-w-xs md:max-w-sm h-full justify-start overflow-y-auto pr-2 no-scrollbar">
+            {/* Turn Message */}
+            <div className="min-h-[48px] md:min-h-[56px]">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={gameState.message}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="bg-neutral-800/80 backdrop-blur-md p-3 md:p-4 rounded-xl md:rounded-2xl border border-neutral-700 text-center shadow-lg"
+                >
+                  <p className={`text-xs md:text-sm lg:text-base font-black uppercase italic tracking-wider ${playerTextColors[gameState.currentPlayer]}`}>
+                    {gameState.message}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Current Player Card */}
+            <div className="bg-neutral-800 p-3 md:p-4 rounded-xl md:rounded-2xl border border-neutral-700 shadow-xl flex items-center gap-3">
+              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl ${playerColors[gameState.currentPlayer]} flex items-center justify-center shadow-lg`}>
+                <User className="text-white w-5 h-5 md:w-6 md:h-6" />
               </div>
               <div>
-                <p className="text-neutral-400 text-xs uppercase font-bold tracking-widest">Current Turn</p>
-                <h2 className="text-white text-xl font-black uppercase italic">{gameState.currentPlayer}</h2>
+                <p className="text-neutral-400 text-[10px] md:text-xs uppercase font-bold tracking-widest">Current Turn</p>
+                <p className="text-white text-base md:text-xl font-black uppercase italic">{gameState.currentPlayer}</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center bg-black/30 p-4 rounded-2xl border border-white/5">
-                <span className="text-neutral-400 text-sm font-bold uppercase">Dice Result</span>
-                <span className="text-white text-3xl font-black italic">{gameState.diceValue || '-'}</span>
-              </div>
+            {/* Dice and Button Section */}
+            <div className="bg-neutral-800 p-3 md:p-4 rounded-xl md:rounded-2xl border border-neutral-700 shadow-xl space-y-3">
+               <div className="flex justify-between items-center bg-black/30 p-3 rounded-lg border border-white/5">
+                 <p className="text-neutral-400 text-[10px] md:text-xs font-bold uppercase">Result</p>
+                 <p className="text-white text-2xl md:text-3xl font-black italic underline decoration-red-500">{gameState.diceValue || '-'}</p>
+               </div>
 
-              <button
+               <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={handleRoll}
-                disabled={gameState.isRolling || gameState.hasRolled || gameState.isGameOver || (gameManagerRef.current && gameManagerRef.current.aiPlayers.has(gameState.currentPlayer as any))}
-                className={`w-full py-4 rounded-2xl font-black uppercase italic tracking-tighter text-xl flex items-center justify-center gap-3 transition-all transform active:scale-95 shadow-xl
-                  ${gameState.isRolling || gameState.hasRolled || gameState.isGameOver || (gameManagerRef.current && gameManagerRef.current.aiPlayers.has(gameState.currentPlayer as any))
-                    ? 'bg-neutral-700 text-neutral-500 cursor-not-allowed' 
-                    : 'bg-red-600 hover:bg-red-500 text-white hover:-translate-y-1'}`}
+                disabled={gameState.hasRolled || gameState.isRolling || gameState.isGameOver}
+                className={`w-full py-4 rounded-xl font-black text-sm md:text-lg uppercase italic tracking-tighter flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  gameState.hasRolled || gameState.isRolling || gameState.isGameOver
+                    ? 'bg-neutral-700 text-neutral-500 cursor-not-allowed opacity-50'
+                    : 'bg-red-600 hover:bg-red-500 text-white'
+                }`}
               >
-                <Dices className={`w-6 h-6 ${gameState.isRolling ? 'animate-spin' : ''}`} />
+                <Dices className={`w-4 h-4 md:w-5 md:h-5 ${gameState.isRolling ? 'animate-spin' : ''}`} />
                 {gameState.isRolling ? 'Rolling...' : 'Roll Dice'}
-              </button>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setIsStatsOpen(true)}
-                  className="py-3 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all transform active:scale-95 bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-white hover:bg-neutral-700"
-                >
-                  <BarChart3 className="w-3 h-3" />
-                  Stats
-                </button>
-                <button
-                  onClick={() => setGameMode('menu')}
-                  className="py-3 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all transform active:scale-95 bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-white hover:bg-neutral-700"
-                >
-                  <Home className="w-3 h-3" />
-                  Menu
-                </button>
-              </div>
+              </motion.button>
             </div>
-          </div>
 
-          {/* Legend / Info */}
-          <div className="bg-neutral-800/50 p-6 rounded-3xl border border-neutral-700/50">
-            <h3 className="text-white text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-yellow-500" />
-              Game Rules
-            </h3>
-            <ul className="text-neutral-400 text-xs space-y-2 font-medium">
-              <li className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                Roll a 6 to deploy from base
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                Capture enemies to get a bonus roll
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                Safe zones (stars) prevent capture
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                Reach the center to win!
-              </li>
-            </ul>
+            {/* Menu Tabs */}
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
+              <button onClick={() => setIsStatsOpen(true)} className="bg-neutral-800 hover:bg-neutral-700 p-3 rounded-xl border border-neutral-700 text-white font-bold flex items-center justify-center gap-2 text-[10px] md:text-xs uppercase">
+                <BarChart3 className="w-4 h-4" /> Stats
+              </button>
+              <button onClick={() => setGameMode('menu')} className="bg-neutral-800 hover:bg-neutral-700 p-3 rounded-xl border border-neutral-700 text-white font-bold flex items-center justify-center gap-2 text-[10px] md:text-xs uppercase">
+                <Home className="w-4 h-4" /> Menu
+              </button>
+            </div>
+
+            {/* Rules Section (Very Compact) */}
+            <div className="bg-neutral-800/40 p-3 md:p-4 rounded-xl border border-neutral-700/50">
+              <h4 className="text-white text-[10px] md:text-xs font-black uppercase italic mb-2 flex items-center gap-2">
+                <Trophy className="w-3 h-3 text-yellow-500" /> Rules
+              </h4>
+              <ul className="text-[9px] md:text-[10px] text-neutral-400 space-y-1">
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-red-500" /> Roll 6 to deploy</li>
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-red-500" /> Captures = Bonus roll</li>
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-red-500" /> Safe zones prevent capture</li>
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-red-500" /> Reach center to win!</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="mt-12 text-neutral-600 text-[10px] uppercase tracking-[0.3em] font-bold">
-        &copy; 2026 Ludo Warfare &bull; Tactical Board Engine v1.0
-      </div>
-
-      {/* Stats Modal */}
-      {gameManagerRef.current && (
-        <StatsModal
-          isOpen={isStatsOpen}
-          onClose={() => setIsStatsOpen(false)}
-          stats={gameManagerRef.current.stats.stats}
-          players={gameManagerRef.current.players}
-        />
-      )}
-    </div>
+      <StatsModal 
+        isOpen={isStatsOpen} 
+        onClose={() => setIsStatsOpen(false)} 
+        stats={gameManagerRef.current?.stats.stats || []}
+        players={gameManagerRef.current?.players || []}
+      />
     </div>
   );
 }
