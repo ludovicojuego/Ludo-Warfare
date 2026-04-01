@@ -54,6 +54,11 @@ export class GameManager {
     setTimeout(() => this.checkAITurn(), 1000);
   }
 
+  resize(width: number, height: number) {
+    this.board.resize(width, height);
+    this.soldiers.forEach(s => s.updateTarget()); // Sync soldier positions to new scale
+  }
+
   private checkAITurn() {
     if (this.isGameOver) return;
     const currentPlayer = this.players[this.currentPlayerIndex];

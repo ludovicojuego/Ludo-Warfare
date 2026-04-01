@@ -20,8 +20,46 @@ export default function App() {
   const isStatsOpenRef = useRef(false);
   const [gameMode, setGameMode] = useState<'menu' | 'local' | 'ai'>('menu');
   const [playerCount, setPlayerCount] = useState(4);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState(600);
   
-  // Sync ref with state
+  // Dynamic Resizing Logic
+  useEffect(() => {
+    const updateSize = () => {
+      if (!containerRef.current) return;
+      const { clientWidth, clientHeight } = containerRef.current;
+      
+      // We want to keep the board a square. 
+      // Leave space for padding and the sidebar on larger screens.
+      const isLandscape = clientWidth > clientHeight;
+      let size;
+      
+      if (isLandscape) {
+        // Landscape (TV/Desktop): Height is usually the limiting factor
+        // Leave room for header and padding
+        size = Math.min(clientHeight * 0.85, clientWidth * 0.6);
+      } else {
+        // Portrait (Mobile): Width is the limiting factor
+        size = clientWidth * 0.9;
+      }
+      
+      setCanvasSize(Math.max(300, size)); // Min size of 300px
+      
+      if (gameManagerRef.current) {
+        gameManagerRef.current.resize(size, size);
+      }
+    };
+
+    const observer = new ResizeObserver(updateSize);
+    if (containerRef.current) observer.observe(containerRef.current);
+    window.addEventListener('resize', updateSize);
+    updateSize(); // Initial call
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [gameMode]);
   useEffect(() => {
     isStatsOpenRef.current = isStatsOpen;
   }, [isStatsOpen]);
@@ -169,7 +207,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+    <div ref={containerRef} className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-4 md:p-8 font-sans relative overflow-hidden">
       <AnimatePresence>
         {gameMode === 'menu' && (
           <StartMenu onStart={startGame} />
@@ -199,26 +237,27 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-      <div className="relative z-10 flex flex-col items-center justify-center w-full">
+      <div className="relative z-10 flex flex-col items-center justify-center w-full h-full max-w-7xl mx-auto">
         {/* Header */}
-      <div className="mb-6 text-center">
-        <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter uppercase italic flex items-center gap-4">
-          <Swords className="w-12 h-12 text-red-500" />
+      <div className="mb-4 md:mb-8 text-center">
+        <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter uppercase italic flex items-center justify-center gap-4">
+          <Swords className="w-8 h-8 md:w-12 md:h-12 text-red-500" />
           Ludo / Parchís
           <span className="text-red-500 italic">Warfare</span>
         </h1>
-        <p className="text-neutral-400 text-sm uppercase tracking-widest mt-2">Animated Soldier Edition</p>
+        <p className="text-neutral-400 text-[10px] md:text-xs uppercase tracking-[0.2em] mt-1 font-bold">Animated Soldier Edition</p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8 items-center justify-center w-full max-w-6xl">
+      <div className="flex flex-col lg:flex-row gap-6 md:gap-12 items-center lg:items-start justify-center w-full">
         {/* Game Board Container */}
-        <div className="relative bg-neutral-800 p-4 rounded-3xl shadow-2xl border-4 border-neutral-700">
+        <div className="relative bg-neutral-800 p-2 md:p-4 rounded-3xl shadow-2xl border-4 border-neutral-700 flex-shrink-0">
           <canvas
             ref={canvasRef}
-            width={600}
-            height={600}
+            width={canvasSize}
+            height={canvasSize}
             onClick={handleCanvasClick}
-            className="rounded-xl cursor-crosshair max-w-full h-auto"
+            className="rounded-xl cursor-crosshair shadow-inner"
+            style={{ width: `${canvasSize}px`, height: `${canvasSize}px` }}
           />
         </div>
 
