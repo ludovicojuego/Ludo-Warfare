@@ -16,9 +16,10 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
+        cache: 'npm'
 
     - name: install dependencies
-      run: npm ci || npm install
+      run: npm install
 
     - name: build web app
       run: npm run build
@@ -29,15 +30,14 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: install capacitor dependencies
-      run: npm i @capacitor/cli @capacitor/core @capacitor/android
-
     - name: sync capacitor
       run: npx cap sync android
 
     - name: build apk
       working-directory: ./android
-      run: chmod +x ./gradlew && ./gradlew assembleDebug
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug
 
     - name: upload artifact
       uses: actions/upload-artifact@v4
