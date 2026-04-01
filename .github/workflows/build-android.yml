@@ -1,0 +1,46 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: install dependencies
+      run: npm ci || npm install
+
+    - name: build web app
+      run: npm run build
+
+    - name: setup java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: install capacitor dependencies
+      run: npm i @capacitor/cli @capacitor/core @capacitor/android
+
+    - name: sync capacitor
+      run: npx cap sync android
+
+    - name: build apk
+      working-directory: ./android
+      run: ./gradlew assembleDebug
+
+    - name: upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: android/app/build/outputs/apk/debug/app-debug.apk
